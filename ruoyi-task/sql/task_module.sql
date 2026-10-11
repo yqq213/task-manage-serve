@@ -1,0 +1,51 @@
+-- 在已有若依数据库中执行；只新增任务表，不修改用户、角色及其他已有表。
+-- MySQL 8.0；重复执行不会删除已有任务。生产执行前须确认同名表结构。
+CREATE TABLE IF NOT EXISTS `task` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '任务ID',
+  `title` varchar(200) NOT NULL COMMENT '任务标题',
+  `description` text COMMENT '纯文本描述，应用限制5000字符',
+  `priority` varchar(10) NOT NULL COMMENT 'LOW低 MEDIUM中 HIGH高',
+  `status` varchar(20) NOT NULL DEFAULT 'TODO' COMMENT 'TODO待办 IN_PROGRESS进行中 DONE已完成',
+  `assignee_id` bigint NOT NULL COMMENT '当前负责人',
+  `creator_id` bigint NOT NULL COMMENT '创建人，创建后不可修改',
+  `due_date` datetime DEFAULT NULL COMMENT '截止时间（北京时间）',
+  `completed_time` datetime DEFAULT NULL COMMENT '完成时间',
+  `create_by` varchar(64) NOT NULL COMMENT '创建人账号',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_by` varchar(64) NOT NULL COMMENT '最后修改人账号',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '0正常 2已删除',
+  `deleted_by` bigint DEFAULT NULL COMMENT '删除人ID',
+  `deleted_time` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_task_creator` (`creator_id`,`del_flag`,`create_time`,`id`),
+  KEY `idx_task_assignee` (`assignee_id`,`del_flag`,`create_time`,`id`),
+  KEY `idx_task_status` (`del_flag`,`status`,`create_time`,`id`),
+  KEY `idx_task_priority` (`del_flag`,`priority`,`create_time`,`id`),
+  KEY `idx_task_created` (`del_flag`,`create_time`,`id`),
+  CONSTRAINT `fk_task_assignee` FOREIGN KEY (`assignee_id`) REFERENCES `sys_user` (`user_id`),
+  CONSTRAINT `fk_task_creator` FOREIGN KEY (`creator_id`) REFERENCES `sys_user` (`user_id`),
+  CONSTRAINT `fk_task_deleted_by` FOREIGN KEY (`deleted_by`) REFERENCES `sys_user` (`user_id`),
+  CONSTRAINT `ck_task_priority` CHECK (`priority` IN ('LOW','MEDIUM','HIGH')),
+  CONSTRAINT `ck_task_status` CHECK (`status` IN ('TODO','IN_PROGRESS','DONE')),
+  CONSTRAINT `ck_task_deleted` CHECK (`del_flag` IN ('0','2')),
+  CONSTRAINT `ck_task_completed` CHECK ((`status` = 'DONE' AND `completed_time` IS NOT NULL) OR (`status` <> 'DONE' AND `completed_time` IS NULL))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务主表';
+
+CREATE TABLE IF NOT EXISTS `task_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `task_id` bigint NOT NULL COMMENT '任务ID',
+  `operator_id` bigint NOT NULL COMMENT '操作人ID',
+  `operator_name` varchar(30) NOT NULL COMMENT '操作人账号快照',
+  `action` varchar(20) NOT NULL COMMENT 'CREATE UPDATE ASSIGN STATUS DELETE',
+  `before_data` json DEFAULT NULL COMMENT '变更前业务字段快照',
+  `after_data` json NOT NULL COMMENT '变更后业务字段快照',
+  `remark` varchar(500) NOT NULL COMMENT '操作说明',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_task_log_history` (`task_id`,`create_time`,`id`),
+  KEY `idx_task_log_operator` (`operator_id`),
+  CONSTRAINT `fk_task_log_task` FOREIGN KEY (`task_id`) REFERENCES `task` (`id`),
+  CONSTRAINT `fk_task_log_operator` FOREIGN KEY (`operator_id`) REFERENCES `sys_user` (`user_id`),
+  CONSTRAINT `ck_task_log_action` CHECK (`action` IN ('CREATE','UPDATE','ASSIGN','STATUS','DELETE'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务操作历史（与任务变更同事务写入）';

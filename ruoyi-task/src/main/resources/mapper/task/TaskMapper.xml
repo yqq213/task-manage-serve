@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.task.mapper.TaskMapper">
+    <resultMap id="StatsResult" type="com.ruoyi.task.domain.TaskStats$Aggregate">
+        <constructor>
+            <arg column="status" javaType="com.ruoyi.task.domain.TaskStatus"/>
+            <arg column="priority" javaType="com.ruoyi.task.domain.TaskPriority"/>
+            <arg column="task_count" javaType="_long"/>
+            <arg column="personal_count" javaType="_long"/>
+        </constructor>
+    </resultMap>
+    <select id="selectStats" resultMap="StatsResult">
+        select status, priority, count(*) as task_count,
+            sum(case when assignee_id = #{userId} then 1 else 0 end) as personal_count
+        from task where del_flag = '0'
+        <if test="viewerId != null">
+            and (creator_id = #{viewerId} or assignee_id = #{viewerId})
+        </if>
+        <if test="startTime != null">and create_time &gt;= #{startTime}</if>
+        <if test="endTime != null">and create_time &lt; #{endTime}</if>
+        group by status, priority
+    </select>
+    <resultMap id="TaskResult" type="com.ruoyi.task.domain.Task">
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="description" column="description"/>
+        <result property="priority" column="priority"/>
+        <result property="status" column="status"/>
+        <result property="assigneeId" column="assignee_id"/>
+        <result property="assigneeName" column="assignee_name"/>
+        <result property="creatorId" column="creator_id"/>
+        <result property="creatorName" column="creator_name"/>
+        <result property="dueDate" column="due_date"/>
+        <result property="completedTime" column="completed_time"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="deletedBy" column="deleted_by"/>
+        <result property="deletedTime" column="deleted_time"/>
+    </resultMap>
+    <resultMap id="LogResult" type="com.ruoyi.task.domain.TaskLog">
+        <id property="id" column="id"/>
+        <result property="taskId" column="task_id"/>
+        <result property="operatorId" column="operator_id"/>
+        <result property="operatorName" column="operator_name"/>
+        <result property="action" column="action"/>
+        <result property="beforeData" column="before_data"/>
+        <result property="afterData" column="after_data"/>
+        <result property="remark" column="remark"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+    <resultMap id="AssigneeResult" type="com.ruoyi.task.domain.TaskAssignee">
+        <constructor>
+            <idArg column="user_id" javaType="java.lang.Long"/>
+            <arg column="user_name" javaType="java.lang.String"/>
+            <arg column="nick_name" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+    <select id="selectList" resultMap="TaskResult">
+        select t.*, a.nick_name as assignee_name, c.nick_name as creator_name
+        from task t
+        left join sys_user a on a.user_id = t.assignee_id
+        left join sys_user c on c.user_id = t.creator_id
+        where t.del_flag = '0'
+        <if test="viewerId != null">
+            and (t.creator_id = #{viewerId} or t.assignee_id = #{viewerId})
+        </if>
+        <if test="query.keyword != null and query.keyword != ''">
+            and (locate(#{query.keyword}, t.title) &gt; 0 or locate(#{query.keyword}, t.description) &gt; 0)
+        </if>
+        <if test="query.status != null">and t.status = #{query.status}</if>
+        <if test="query.priority != null">and t.priority = #{query.priority}</if>
+        <if test="query.assigneeId != null">and t.assignee_id = #{query.assigneeId}</if>
+        <!-- 排序仅由固定SQL分支生成，无客户端字符串插值。枚举按业务顺序排序。 -->
+        order by
+        <choose>
+            <when test="query.orderByColumn == 'updateTime'">t.update_time</when>
+            <when test="query.orderByColumn == 'dueDate'">t.due_date</when>
+            <when test="query.orderByColumn == 'priority'">field(t.priority, 'LOW', 'MEDIUM', 'HIGH')</when>
+            <when test="query.orderByColumn == 'status'">field(t.status, 'TODO', 'IN_PROGRESS', 'DONE')</when>
+            <when test="query.orderByColumn == 'title'">t.title</when>
+            <otherwise>t.create_time</otherwise>
+        </choose>
+        <choose><when test="query.isAsc == 'asc'">asc</when><otherwise>desc</otherwise></choose>, t.id desc
+    </select>
+    <select id="selectById" resultMap="TaskResult">
+        select t.*
+        <if test="!lock">
+            , (select nick_name from sys_user where user_id = t.assignee_id) as assignee_name
+            , (select nick_name from sys_user where user_id = t.creator_id) as creator_name
+        </if>
+        from task t where t.id = #{id} and t.del_flag = '0'
+        <if test="lock">for update</if>
+    </select>
+    <select id="selectLogs" resultMap="LogResult">
+        <!-- 保留原始审计日志，查询时使用当前昵称，并从快照还原中文变更说明。 -->
+        select l.id, l.task_id, l.operator_id,
+            coalesce(nullif(trim(o.nick_name), ''), nullif(o.user_name, ''), l.operator_name) as operator_name,
+            l.action, l.before_data, l.after_data, l.create_time,
+            case l.action
+                when 'STATUS' then coalesce(concat('状态由',
+                    case json_unquote(json_extract(l.before_data, '$.status'))
+                        when 'TODO' then '待办' when 'IN_PROGRESS' then '进行中' when 'DONE' then '已完成' end,
+                    '变更为',
+                    case json_unquote(json_extract(l.after_data, '$.status'))
+                        when 'TODO' then '待办' when 'IN_PROGRESS' then '进行中' when 'DONE' then '已完成' end), l.remark)
+                when 'ASSIGN' then coalesce(concat('负责人由',
+                    coalesce(nullif(trim(b.nick_name), ''), nullif(b.user_name, ''),
+                        concat('用户', nullif(json_unquote(json_extract(l.before_data, '$.assigneeId')), 'null'))),
+                    '变更为',
+                    coalesce(nullif(trim(a.nick_name), ''), nullif(a.user_name, ''),
+                        concat('用户', nullif(json_unquote(json_extract(l.after_data, '$.assigneeId')), 'null')))), l.remark)
+                else l.remark
+            end as remark
+        from task_log l
+        left join sys_user o on o.user_id = l.operator_id
+        left join sys_user b on b.user_id = json_unquote(json_extract(l.before_data, '$.assigneeId'))
+        left join sys_user a on a.user_id = json_unquote(json_extract(l.after_data, '$.assigneeId'))
+        where l.task_id = #{taskId} order by l.create_time asc, l.id asc
+    </select>
+    <select id="selectAssignees" resultMap="AssigneeResult">
+        select user_id, user_name, nick_name from sys_user
+        where status = '0' and del_flag = '0' order by user_id
+    </select>
+    <select id="selectActiveAssignee" resultType="java.lang.Long">
+        select user_id from sys_user where user_id = #{userId} and status = '0' and del_flag = '0' for share
+    </select>
+    <insert id="insertTask" useGeneratedKeys="true" keyProperty="id">
+        insert into task (title, description, priority, status, assignee_id, creator_id, due_date,
+            create_by, create_time, update_by, update_time, del_flag)
+        values (#{title}, #{description}, #{priority}, #{status}, #{assigneeId}, #{creatorId}, #{dueDate},
+            #{createBy}, #{createTime}, #{updateBy}, #{updateTime}, #{delFlag})
+    </insert>
+    <update id="updateTask">
+        update task set title = #{title}, description = #{description}, priority = #{priority},
+            status = #{status}, assignee_id = #{assigneeId}, due_date = #{dueDate},
+            completed_time = #{completedTime}, update_by = #{updateBy}, update_time = #{updateTime},
+            del_flag = #{delFlag}, deleted_by = #{deletedBy}, deleted_time = #{deletedTime}
+        where id = #{id} and del_flag = '0'
+    </update>
+    <insert id="insertLog">
+        insert into task_log (task_id, operator_id, operator_name, action, before_data, after_data, remark, create_time)
+        values (#{taskId}, #{operatorId}, #{operatorName}, #{action}, #{beforeData}, #{afterData}, #{remark}, #{createTime})
+    </insert>
+</mapper>
