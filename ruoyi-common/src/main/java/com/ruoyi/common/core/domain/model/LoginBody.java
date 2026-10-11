@@ -13,7 +13,7 @@ public class LoginBody
     private String username;
 
     /**
-     * 用户密码
+     * RSA-OAEP/SHA-256加密后的Base64密码，仅在登录入口解密
      */
     private String password;
 

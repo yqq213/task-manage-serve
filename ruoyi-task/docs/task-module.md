@@ -15,7 +15,7 @@ SQL与本文档随模块放置，模块抽离不改变接口路径、业务规�
 1. 在目标若依数据库执行 `ruoyi-task/sql/task_module.sql`，新增 `task`、`task_log`。
 2. 按已有 `application-druid.yml` 配置连接数据库，按 `application.yml` 配置Redis。
 3. 在仓库根目录执行 `mvn -pl ruoyi-admin -am package`。
-4. 执行 `java -jar ruoyi-admin/target/ruoyi-admin.jar`，默认端口8080。
+4. 执行 `java -jar ruoyi-admin/target/task-admin.jar`，默认端口8080。
 5. 使用现有 `/login` 登录，后续请求携带 `Authorization: Bearer <登录返回的token>`。
 
 SQL支持重复执行，不删除表或任务；`IF NOT EXISTS`不负责升级已有同名表。用户信息仍由原有用户管理模块维护。

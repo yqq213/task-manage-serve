@@ -19,6 +19,7 @@ import com.ruoyi.common.utils.DateUtils;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.framework.web.service.SysLoginService;
+import com.ruoyi.framework.web.service.LoginPasswordService;
 import com.ruoyi.framework.web.service.SysPermissionService;
 import com.ruoyi.framework.web.service.TokenService;
 import com.ruoyi.system.service.ISysConfigService;
@@ -34,6 +35,16 @@ public class SysLoginController
 {
     @Autowired
     private SysLoginService loginService;
+
+    @Autowired
+    private LoginPasswordService loginPasswordService;
+
+    /** 匿名获取登录公钥，私钥不会通过接口返回。 */
+    @GetMapping("/login/public-key")
+    public AjaxResult publicKey()
+    {
+        return AjaxResult.success("操作成功", loginPasswordService.getPublicKey());
+    }
 
     @Autowired
     private ISysMenuService menuService;
@@ -58,7 +69,7 @@ public class SysLoginController
     {
         AjaxResult ajax = AjaxResult.success();
         // 生成令牌
-        String token = loginService.login(loginBody.getUsername(), loginBody.getPassword(), loginBody.getCode(),
+        String token = loginService.login(loginBody.getUsername(), loginPasswordService.decrypt(loginBody.getPassword()), loginBody.getCode(),
                 loginBody.getUuid());
         ajax.put(Constants.TOKEN, token);
         return ajax;

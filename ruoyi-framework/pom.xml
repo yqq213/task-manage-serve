@@ -17,6 +17,13 @@
 
     <dependencies>
 
+        <!-- 验证登录加密协议和明文拒绝行为 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- SpringBoot Web容器 -->
          <dependency>
             <groupId>org.springframework.boot</groupId>

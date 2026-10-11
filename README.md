@@ -120,7 +120,7 @@ mvn -version
 | `server.port` | `8080` |
 | `server.servlet.context-path` | `/` |
 | `spring.profiles.active` | `druid` |
-| `spring.data.redis.host` / `port` | `localhost` / `6379` |
+| `spring.data.redis.host` / `port` | `127.0.0.1` / `16379`，本地 SSH 隧道 |
 | `spring.data.redis.database` | `0` |
 | `token.header` | `Authorization` |
 | `token.expireTime` | `60` 分钟，登录缓存有效期 |
@@ -132,14 +132,26 @@ mvn -version
 
 数据库密码、Redis 密码和 `token.secret` 应按环境管理；正式环境需设置独立的 Token 密钥。本文档不记录真实连接凭据。
 
-### 4. 构建与启动
+### 4. 建立 Redis SSH 隧道
+
+本地开发使用云服务器 Redis。服务器 Redis 仅监听本机 `127.0.0.1:6379`，通过 SSH 转发到开发电脑的 `127.0.0.1:16379`，不需要开放公网 Redis 端口。
+
+```sh
+# 在单独终端执行，按提示输入服务器SSH密码，保持此终端运行。
+# -F /dev/null 避免本机SSH配置中的全局HostName覆盖目标服务器地址。
+ssh -F /dev/null -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -N -L 127.0.0.1:16379:127.0.0.1:6379 root@39.96.7.19
+```
+
+项目使用 `spring.data.redis.password` 中的 Redis 密码认证；SSH 密码与 Redis 密码分别使用，不能相互替代。隧道退出后，需重新执行上述命令再启动项目。若后端部署在 Redis 所在云服务器上，应覆盖 Redis 地址为 `127.0.0.1:6379`，无需此开发电脑隧道。
+
+### 5. 构建与启动
 
 ```sh
 # 构建启动模块及其依赖，同时运行测试。
 mvn -pl ruoyi-admin -am clean package
 
 # 从仓库根目录启动，默认监听 8080。
-java -jar ruoyi-admin/target/ruoyi-admin.jar
+java -jar ruoyi-admin/target/task-admin.jar
 ```
 
 也可在 IDE 中运行 `com.ruoyi.RuoYiApplication`。完整启动需要数据库和 Redis 可用。
@@ -151,10 +163,15 @@ java -jar ruoyi-admin/target/ruoyi-admin.jar
 项目采用 Spring Security + JWT + Redis 登录状态管理，安全配置使用无 Session 模式。JWT 用于识别登录上下文，登录用户及权限信息由 Redis 缓存管理。
 
 1. 通过 `GET /captchaImage` 获取验证码信息，按当前验证码开关完成登录校验。
-2. 通过 `POST /login` 登录，请求字段为 `username`、`password`、`code`、`uuid`。
-3. 登录成功后，令牌位于响应顶层 `token` 字段。
-4. 后续受保护请求使用 `Authorization` 请求头，值为 `Bearer ` 加登录返回的令牌。
-5. 使用 `/logout` 退出登录。
+2. 通过 `GET /login/public-key` 匿名获取 PEM 公钥，公钥位于响应的 `data` 字段。前端使用 `node-forge` 按 RSA-OAEP 加密 UTF-8 密码，OAEP 和 MGF1 均使用 SHA-256，结果编码为 Base64；支持普通 HTTP 的 IP 地址页面。
+3. 通过 `POST /login` 登录，请求字段为 `username`、`password`、`code`、`uuid`，其中 `password` 必须是上述密文。后端解密后继续原有验证码及 BCrypt 登录认证；明文、损坏密文或旧密钥密文会被拒绝，前端加密失败不会提交登录请求。
+4. 登录成功后，令牌位于响应顶层 `token` 字段。
+5. 后续受保护请求使用 `Authorization` 请求头，值为 `Bearer ` 加登录返回的令牌。
+6. 使用 `/logout` 退出登录。
+
+登录私钥配置为 `application.yml` 中的 `login.password.private-key`，格式为至少 2048 位的 PKCS#8 RSA PEM；当前已配置一套可运行密钥。公钥由私钥派生，无需另行配置；配置缺失或无效时应用拒绝启动。多实例部署须配置同一私钥，更换私钥后重启后端，前端下一次登录会获取新公钥。前后端需配套发布，旧客户端的明文登录不再兼容。
+
+该加密仅覆盖 `/login` 的密码字段，注册、修改密码及“记住密码”Cookie沿用现有实现。RSA 密文不是一次性凭据，本方案未增加登录防重放协议；普通 HTTP 下公钥、Token 等仍缺少传输保护，部署时仍建议使用 HTTPS。私钥随配置保存，须限制配置文件及构建产物的访问范围。
 
 登录接口返回结构示意：
 

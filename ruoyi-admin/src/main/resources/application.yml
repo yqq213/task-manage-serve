@@ -71,10 +71,10 @@ spring:
   data:
     # redis 配置
     redis:
-      # 地址
-      host: localhost
-      # 端口，默认为6379
-      port: 6379
+      # 本地开发通过SSH隧道访问云服务器Redis，启动方式见README。
+      host: 127.0.0.1
+      # SSH本地转发端口，对应云服务器127.0.0.1:6379。
+      port: 16379
       # 数据库索引
       database: 0
       # 密码
@@ -100,6 +100,39 @@ token:
   secret: abcdefghijklmnopqrstuvwxyz
   # 令牌有效期（默认30分钟）
   expireTime: 60
+
+# 登录密码传输加密；固定PKCS#8私钥，多实例部署需使用同一密钥。
+login:
+  password:
+    private-key: |
+      -----BEGIN PRIVATE KEY-----
+      MIIEugIBADANBgkqhkiG9w0BAQEFAASCBKQwggSgAgEAAoIBAQDC89M8XYnOCoap
+      /jp7AWDQsE/0tmjLaR+Ofl2lhcf9Rhix6Lp70jKpiw8aaPjIMVioc6Dj2xx9UwjF
+      /kv4DGmxJwqK9DfU0H3WE7Lgmv8gffmOpNKjsn6eRKIoY+2YPqGO8ya1CzHrE4TB
+      l73y7IY+JI/xpKaX53KTPbKr4TzV+JLWGeb4XaOdmzHK8yHMqXVUneW+JWSSnG1V
+      bHs3s3+rUZoGevKERQNqsIzZiXGr1S25CjOTXhNWAfwowlcLRTdWO4iuHZNFTz1q
+      6pnRoHgCow3kaftda2qeqorQlislFDcqwmbfds5YeHomjTyes6/5RXhXyJq3L5tA
+      N70/JifzAgMBAAECgf9tfWaz1dTkxsu+dJgqtimptc3cvs6OGgqCp5JigIdft8W1
+      CTkIUbAia/cr+nNNGGnPFVqcZR2bDFzEnWLw0HmoIWGRjHskJ0mhnIsS74haDJ84
+      mjzPelOij8z0qWOrAUkQjinZvRqE7DiGurJlg8bE5xlGK92dctFYUmrqHZYNP+ht
+      9wHTOOq+77DqLggl/5yTq028V8srQkXoFo3ueLYyPnf6hODM62u7YOvlda2cELVd
+      pq7TEXwmbP4oczYMt5iFbCNd98cvWP1lVXkBszi5iH2ArBlRnRhHZGK8GjcIm7Ts
+      /Yop8KZQM3yXBYV6ATOB+0sDpe9oAGBBUm3pZWECgYEA5NyWqCzN21DlKoEumjnm
+      IieK/HFIrrDeirIa/7sIE5Oy7T6V7/UCju1ZoZtALU688677lejxC0DxpJYUllcy
+      3lu24btTDXurAmkgWz0cteSPRAbZ7JNK7hlO3spxwiG5fiooi3SmuFMRMcyvE+MM
+      vVudfQ4CUNAGnCQ9UTLrENsCgYEA2hHgC1YIuVIdtUDlqc7Z6OciKOBJK96uQrCG
+      E8kvnlc0Pf3s+xEBK7Z5wv0c6wQhKA9aGj8++nA6OguPOOOuFReRU6N3xDrHIlat
+      ytVLj+bsCU6iLUWxW3nO0P3BYj4H5Vsn3bbquvYKQpcVWuNFl7AgBvfG+OQbiSM+
+      DN4/hMkCgYAPAIa/r3AvGDZtetpbMcBsLLtnoOVqzh1IajRq3w/AeMYZ1yhs+lqY
+      k+Z0OYETdz3bm3TSdtqWKkOszkm7MSwcd1adpXHkSF8FYW7FjFP9eGYLx4cxgtY+
+      lVoeMJcUarGGG61ctuDW5FsUMJ6pZxDGuOKx9+Ee+wPz6Ew8rmHKUQKBgGTsnu9A
+      KxtxyLQJTAFR7YIf7qxSWSsHjUjqH7NqijJTE6eZLKNp1Evh0OqQcGDIcXvz1vSM
+      zt3jMN+KWAexP/EdDjJSVmyn81+OFDLqkmUQL6+DCAXB2nqGnlQVDPol0Uux63pu
+      XKaYllkJSWXeB2hTqA7xf9HS6HeIqwATn/wZAoGAFF7Iq9n7oNwoyba23lMRPnnm
+      DeyyEl3sb5YIh1fnVLqhTYi6ch4S8cwM+z344B1S2UN6j+VASz1VsBBXuh3lqDjo
+      YxeAf0GibXYc/I0C/vkf1+9uE9j7ln+eDmKeTiKgT4BZe/F8jyiNB63gsd0TJIZy
+      XiYB+l8s/2rk5OQjdGU=
+      -----END PRIVATE KEY-----
 
 # MyBatis配置
 mybatis:
