@@ -32,6 +32,8 @@ public class JwtAuthenticationTokenFilter extends OncePerRequestFilter
             throws ServletException, IOException
     {
         LoginUser loginUser = tokenService.getLoginUser(request);
+        // 标记身份读取完成时间，供外层慢请求日志定位 Redis/令牌解析阶段。
+        request.setAttribute(SlowRequestLogFilter.AUTH_LOOKUP_NANOS, System.nanoTime());
         if (StringUtils.isNotNull(loginUser) && StringUtils.isNull(SecurityUtils.getAuthentication()))
         {
             tokenService.verifyToken(loginUser);
@@ -39,6 +41,7 @@ public class JwtAuthenticationTokenFilter extends OncePerRequestFilter
             authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authenticationToken);
         }
+        request.setAttribute(SlowRequestLogFilter.AUTH_COMPLETE_NANOS, System.nanoTime());
         chain.doFilter(request, response);
     }
 }
