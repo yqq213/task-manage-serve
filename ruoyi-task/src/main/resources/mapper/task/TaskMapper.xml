@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.task.mapper.TaskMapper">
+    <!-- 聚合结果为 record，按构造参数顺序映射状态、优先级、总数和个人负责数量。 -->
     <resultMap id="StatsResult" type="com.ruoyi.task.domain.TaskStats$Aggregate">
         <constructor>
             <arg column="status" javaType="com.ruoyi.task.domain.TaskStatus"/>
@@ -9,6 +10,11 @@
             <arg column="personal_count" javaType="_long"/>
         </constructor>
     </resultMap>
+    <!--
+        仅统计未删除任务；viewerId 控制可见范围，userId 独立用于统计本人负责数量。
+        时间条件按创建时间过滤：startTime 为包含下界，endTime 为不包含上界。
+        日期文本由服务层按北京时间生成；缺失分组及最终百分比由服务层补齐和计算。
+    -->
     <select id="selectStats" resultMap="StatsResult">
         select status, priority, count(*) as task_count,
             sum(case when assignee_id = #{userId} then 1 else 0 end) as personal_count
@@ -20,6 +26,7 @@
         <if test="endTime != null">and create_time &lt; #{endTime}</if>
         group by status, priority
     </select>
+    <!-- 任务表字段及 BaseEntity 审计字段映射；两个人名字段来自查询关联，不属于任务表。 -->
     <resultMap id="TaskResult" type="com.ruoyi.task.domain.Task">
         <id property="id" column="id"/>
         <result property="title" column="title"/>
@@ -40,6 +47,7 @@
         <result property="deletedBy" column="deleted_by"/>
         <result property="deletedTime" column="deleted_time"/>
     </resultMap>
+    <!-- 日志快照保持 JSON 字符串；operator_name 与 remark 可由查询转换为展示内容。 -->
     <resultMap id="LogResult" type="com.ruoyi.task.domain.TaskLog">
         <id property="id" column="id"/>
         <result property="taskId" column="task_id"/>
@@ -51,6 +59,7 @@
         <result property="remark" column="remark"/>
         <result property="createTime" column="create_time"/>
     </resultMap>
+    <!-- 负责人候选为 record，通过构造器绑定公开的用户 ID、账号及昵称。 -->
     <resultMap id="AssigneeResult" type="com.ruoyi.task.domain.TaskAssignee">
         <constructor>
             <idArg column="user_id" javaType="java.lang.Long"/>
@@ -58,6 +67,11 @@
             <arg column="nick_name" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
+    <!--
+        按可见范围和可选条件查询未删除任务，分页由服务层 PageHelper 负责。
+        LOCATE 将关键词作为普通子串匹配标题或描述，不将百分号、下划线解释为 LIKE 通配符。
+        用户名称读取当前昵称；各筛选条件以 AND 叠加，排序相同的记录按主键降序排列。
+    -->
     <select id="selectList" resultMap="TaskResult">
         select t.*, a.nick_name as assignee_name, c.nick_name as creator_name
         from task t
@@ -85,6 +99,10 @@
         </choose>
         <choose><when test="query.isAsc == 'asc'">asc</when><otherwise>desc</otherwise></choose>, t.id desc
     </select>
+    <!--
+        普通读取附带负责人和创建人昵称；写入前的锁定读取仅查询任务表并追加 FOR UPDATE。
+        锁定读取须处于服务层事务中，锁保持到事务结束；本语句不负责记录级权限校验。
+    -->
     <select id="selectById" resultMap="TaskResult">
         select t.*
         <if test="!lock">
@@ -94,6 +112,11 @@
         from task t where t.id = #{id} and t.del_flag = '0'
         <if test="lock">for update</if>
     </select>
+    <!--
+        按时间、日志 ID 升序返回完整历史，调用方须先校验任务访问权限。
+        操作人优先显示当前非空昵称，其次账号，最后回退日志中的名称快照。
+        状态和负责人变更说明从前后 JSON 快照生成，无法生成时回退原始 remark；不修改存储内容。
+    -->
     <select id="selectLogs" resultMap="LogResult">
         <!-- 保留原始审计日志，查询时使用当前昵称，并从快照还原中文变更说明。 -->
         select l.id, l.task_id, l.operator_id,
@@ -120,19 +143,27 @@
         left join sys_user a on a.user_id = json_unquote(json_extract(l.after_data, '$.assigneeId'))
         where l.task_id = #{taskId} order by l.create_time asc, l.id asc
     </select>
+    <!-- 仅返回正常启用且未删除的用户，按用户 ID 升序作为负责人候选。 -->
     <select id="selectAssignees" resultMap="AssigneeResult">
         select user_id, user_name, nick_name from sys_user
         where status = '0' and del_flag = '0' order by user_id
     </select>
+    <!-- 创建/指派事务内以共享锁校验负责人，防止校验后用户被并发停用或删除。 -->
     <select id="selectActiveAssignee" resultType="java.lang.Long">
         select user_id from sys_user where user_id = #{userId} and status = '0' and del_flag = '0' for share
     </select>
+    <!-- 新建所需初始状态及审计信息由服务层设置；数据库生成主键后回填 Task.id。 -->
     <insert id="insertTask" useGeneratedKeys="true" keyProperty="id">
         insert into task (title, description, priority, status, assignee_id, creator_id, due_date,
             create_by, create_time, update_by, update_time, del_flag)
         values (#{title}, #{description}, #{priority}, #{status}, #{assigneeId}, #{creatorId}, #{dueDate},
             #{createBy}, #{createTime}, #{updateBy}, #{updateTime}, #{delFlag})
     </insert>
+    <!--
+        使用锁定读取后的完整对象覆盖业务字段，null 同样写入，以支持清空描述或截止时间。
+        创建人及创建时间保持不变；逻辑删除也通过本语句写入删除标记、删除人和删除时间。
+        仅更新原本未删除的记录，服务层检查影响行数，并与历史写入共同提交或回滚。
+    -->
     <update id="updateTask">
         update task set title = #{title}, description = #{description}, priority = #{priority},
             status = #{status}, assignee_id = #{assigneeId}, due_date = #{dueDate},
@@ -140,6 +171,7 @@
             del_flag = #{delFlag}, deleted_by = #{deletedBy}, deleted_time = #{deletedTime}
         where id = #{id} and del_flag = '0'
     </update>
+    <!-- 保存操作人名称快照及完整业务前后态；创建时 before_data 为 null，不回填日志主键。 -->
     <insert id="insertLog">
         insert into task_log (task_id, operator_id, operator_name, action, before_data, after_data, remark, create_time)
         values (#{taskId}, #{operatorId}, #{operatorName}, #{action}, #{beforeData}, #{afterData}, #{remark}, #{createTime})

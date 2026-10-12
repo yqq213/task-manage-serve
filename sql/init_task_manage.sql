@@ -1,6 +1,6 @@
 -- 任务管理系统全新初始化；MySQL 8.0.16+，使用 mysql 客户端执行（支持 DELIMITER）。
 -- 固定目标库：task-manage。已有表或视图时拒绝初始化；不删除、不覆盖已有业务表。
--- 初始管理员：admin / TaskManage@2026!；密码仅以 BCrypt 哈希写入用户表。
+-- 初始管理员：admin / admin123；密码仅以 BCrypt 哈希写入用户表。
 -- 包含若依基础数据、Quartz 表及任务表；不创建 MySQL 登录账号。
 -- DDL 会隐式提交；中途失败不能整体回滚，请检查失败位置，不要直接在业务库重试。
 SET NAMES utf8mb4;

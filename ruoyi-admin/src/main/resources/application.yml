@@ -71,10 +71,10 @@ spring:
   data:
     # redis 配置
     redis:
-      # 本地开发通过SSH隧道访问云服务器Redis，启动方式见README。
+      # 本地开发通过SSH隧道访问39.96.7.19上的Redis；启动前须建立隧道。
       host: 127.0.0.1
       # SSH本地转发端口，对应云服务器127.0.0.1:6379。
-      port: 16379
+      port: 6379
       # 数据库索引
       database: 0
       # 密码
@@ -99,7 +99,7 @@ token:
   # 令牌密钥
   secret: abcdefghijklmnopqrstuvwxyz
   # 令牌有效期（默认30分钟）
-  expireTime: 60
+  expireTime: 120
 
 # 登录密码传输加密；固定PKCS#8私钥，多实例部署需使用同一密钥。
 login:

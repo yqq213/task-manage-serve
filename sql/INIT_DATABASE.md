@@ -21,9 +21,9 @@ mysql --host=39.96.7.19 --port=3306 --user=root --password --ssl-mode=REQUIRED -
 ## 初始应用管理员
 
 | 项目 | 值 |
-| --- | --- |
+| --- | -- |
 | 用户名 | `admin` |
-| 初始密码 | `TaskManage@2026!` |
+| 初始密码 | `admin123` |
 | 昵称 | 系统管理员 |
 | 用户 ID | `1` |
 | 角色 | 超级管理员 |

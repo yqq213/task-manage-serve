@@ -3,19 +3,30 @@ package com.ruoyi.task.domain;
 import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
-/** 操作历史；JSON快照以字符串返回，前端可按需解析比较字段。 */
+/**
+ * task_log 表的操作历史对象，与任务变更在同一事务中写入。
+ * <p>前后业务快照以 JSON 字符串返回，包含 null 字段，便于展示字段清空及变更差异。
+ * 操作人名称和部分说明在查询时转换为展示信息，数据库内的原始审计记录保持不变。</p>
+ */
 public class TaskLog
 {
+    /** 日志自增主键，由数据库生成；当前插入映射不回填该值。 */
     private Long id;
+    /** 所属任务 ID，任务逻辑删除后仍保留对应历史。 */
     private Long taskId;
+    /** 执行本次操作的登录用户 ID。 */
     private Long operatorId;
-    /** 查询返回当前用户昵称；昵称为空回退账号，用户不存在时回退日志名称快照。 */
+    /** 写入时保存操作人账号快照；查询优先显示当前昵称，其次账号，最后回退已保存名称。 */
     private String operatorName;
+    /** 动作编码：CREATE 创建、UPDATE 编辑、ASSIGN 指派、STATUS 状态变更、DELETE 删除。 */
     private String action;
+    /** 变更前的业务 JSON 快照；创建动作没有前态，该值为 null。 */
     private String beforeData;
+    /** 变更后的业务 JSON 快照，记录业务字段及完成/删除信息，不包含关联昵称。 */
     private String afterData;
-    /** 展示说明，状态为中文，负责人为当前昵称；数据库原始说明仍保留。 */
+    /** 操作说明；查询时状态转为中文，负责人优先显示当前昵称或账号，转换失败回退原说明。 */
     private String remark;
+    /** 操作时间，写入时与任务本次更新时间一致，按北京时间 yyyy-MM-dd HH:mm:ss 返回。 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date createTime;
 
